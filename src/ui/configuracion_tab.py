@@ -16,10 +16,12 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QCheckBox,
+    QAbstractItemView,
 )
 
 from .. import repositories, config
 from ..utils import format_currency
+from .widgets import titulo_label, estilizar_tabla
 
 
 class ConfiguracionTab(QWidget):
@@ -32,9 +34,11 @@ class ConfiguracionTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Barberos"))
+        layout.addWidget(titulo_label("Configuración"))
+        layout.addWidget(titulo_label("Barberos"))
         self.tabla_barberos = QTableWidget(0, 3)
         self.tabla_barberos.setHorizontalHeaderLabels(["ID", "Nombre", "Activo"])
+        estilizar_tabla(self.tabla_barberos)
         layout.addWidget(self.tabla_barberos)
         form_barbero = QHBoxLayout()
         self.input_barbero = QLineEdit()
@@ -49,11 +53,14 @@ class ConfiguracionTab(QWidget):
         form_barbero.addStretch()
         layout.addLayout(form_barbero)
 
-        layout.addWidget(QLabel("Servicios"))
+        layout.addWidget(titulo_label("Servicios"))
         self.tabla_servicios = QTableWidget(0, 6)
         self.tabla_servicios.setHorizontalHeaderLabels(
             ["ID", "Nombre", "Precio", "Barbero", "Barbería", "Minutos"]
         )
+        estilizar_tabla(self.tabla_servicios)
+        self.tabla_servicios.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla_servicios.itemSelectionChanged.connect(self._rellenar_servicio_form)
         layout.addWidget(self.tabla_servicios)
         form_serv = QHBoxLayout()
         self.input_nombre_serv = QLineEdit()
@@ -72,6 +79,8 @@ class ConfiguracionTab(QWidget):
         self.duracion_spin.setMaximum(240)
         btn_serv = QPushButton("Agregar servicio")
         btn_serv.clicked.connect(self._guardar_servicio)
+        self.btn_actualizar_serv = QPushButton("Actualizar servicio seleccionado")
+        self.btn_actualizar_serv.clicked.connect(self._actualizar_servicio)
         form_serv.addWidget(self.input_nombre_serv)
         form_serv.addWidget(QLabel("Precio"))
         form_serv.addWidget(self.precio_spin)
@@ -82,9 +91,10 @@ class ConfiguracionTab(QWidget):
         form_serv.addWidget(QLabel("Duración (min)"))
         form_serv.addWidget(self.duracion_spin)
         form_serv.addWidget(btn_serv)
+        form_serv.addWidget(self.btn_actualizar_serv)
         layout.addLayout(form_serv)
 
-        layout.addWidget(QLabel("Descansos por barbero"))
+        layout.addWidget(titulo_label("Descansos por barbero"))
         descanso = QHBoxLayout()
         self.combo_descanso_barbero = QComboBox()
         self.combo_descanso_barbero.currentIndexChanged.connect(self._cargar_descansos)
@@ -137,6 +147,7 @@ class ConfiguracionTab(QWidget):
     def _cargar_servicios(self):
         servicios = repositories.list_services(include_inactive=True)
         self.tabla_servicios.setRowCount(0)
+        self.current_service_id = None
         for idx, s in enumerate(servicios):
             self.tabla_servicios.insertRow(idx)
             self.tabla_servicios.setItem(idx, 0, QTableWidgetItem(str(s["id"])))
@@ -160,6 +171,44 @@ class ConfiguracionTab(QWidget):
             True,
         )
         self.input_nombre_serv.clear()
+        self._cargar_servicios()
+
+    def _rellenar_servicio_form(self):
+        row = self.tabla_servicios.currentRow()
+        if row < 0:
+            return
+        self.current_service_id = int(self.tabla_servicios.item(row, 0).text())
+        self.input_nombre_serv.setText(self.tabla_servicios.item(row, 1).text())
+        # valores mostrados están formateados, se requiere mapear al repo
+        servicios = {s["id"]: s for s in repositories.list_services(include_inactive=True)}
+        srv = servicios.get(self.current_service_id)
+        if not srv:
+            return
+        self.precio_spin.setValue(float(srv["price"]))
+        self.gan_barbero_spin.setValue(float(srv["barber_earning"]))
+        self.gan_barberia_spin.setValue(float(srv["shop_liquidation"]))
+        self.duracion_spin.setValue(int(srv["duration_min"]))
+
+    def _actualizar_servicio(self):
+        if not getattr(self, "current_service_id", None):
+            QMessageBox.warning(self, "Seleccione", "Seleccione un servicio para actualizar")
+            return
+        nombre = self.input_nombre_serv.text().strip()
+        if not nombre:
+            QMessageBox.warning(self, "Dato requerido", "Ingrese nombre del servicio")
+            return
+        repositories.update_service(
+            self.current_service_id,
+            nombre,
+            self.precio_spin.value(),
+            self.gan_barbero_spin.value(),
+            self.gan_barberia_spin.value(),
+            int(self.duracion_spin.value()),
+            True,
+        )
+        QMessageBox.information(self, "Actualizado", "Servicio actualizado correctamente")
+        self.input_nombre_serv.clear()
+        self.current_service_id = None
         self._cargar_servicios()
 
     def _cargar_descansos(self):

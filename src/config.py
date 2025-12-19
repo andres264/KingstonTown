@@ -5,6 +5,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "barberia.db"
 BACKUP_DIR = BASE_DIR / "backups"
+LOGO_PATH = BASE_DIR / "logo_barberia.png"
 
 # Horario de la barbería
 HORARIO_APERTURA = (9, 30)  # 09:30

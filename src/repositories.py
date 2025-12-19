@@ -277,3 +277,10 @@ def get_payment_with_lines(appointment_id: int) -> Optional[Tuple[dict, List[dic
     lines = cur.fetchall()
     return dict(pay), [dict(l) for l in lines]
 
+
+def delete_payment(appointment_id: int) -> None:
+    cur = db.conn.cursor()
+    cur.execute("DELETE FROM appointment_service_lines WHERE appointment_id=?;", (appointment_id,))
+    cur.execute("DELETE FROM payments WHERE appointment_id=?;", (appointment_id,))
+    db.conn.commit()
+

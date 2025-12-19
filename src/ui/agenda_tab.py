@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from .. import repositories
 from ..services.agenda_service import agenda_service
-from ..utils import format_currency
+from ..utils import format_currency, format_time_12h
 
 
 class AgendaTab(QWidget):
@@ -33,6 +33,8 @@ class AgendaTab(QWidget):
         layout = QVBoxLayout(self)
 
         filtros = QHBoxLayout()
+        filtros.addWidget(self._titulo_label("Agenda"))
+        filtros.addStretch()
         filtros.addWidget(QLabel("Fecha"))
         self.fecha_filtro = QDateEdit(QDate.currentDate())
         self.fecha_filtro.setCalendarPopup(True)
@@ -55,16 +57,17 @@ class AgendaTab(QWidget):
         filtros.addStretch()
         layout.addLayout(filtros)
 
-        self.tabla = QTableWidget(0, 7)
+        self.tabla = QTableWidget(0, 8)
         self.tabla.setHorizontalHeaderLabels(
-            ["ID", "Inicio", "Fin", "Barbero", "Cliente", "Estado", "Notas"]
+            ["ID", "Inicio", "Fin", "Barbero", "Cliente", "Servicio", "Estado", "Notas"]
         )
         self.tabla.horizontalHeader().setStretchLastSection(True)
+        self._estilizar_tabla(self.tabla)
         layout.addWidget(self.tabla)
 
         acciones = QHBoxLayout()
         self.btn_cancelar = QPushButton("Cancelar cita")
-        self.btn_noshow = QPushButton("Marcar NO ASISTIÓ")
+        self.btn_noshow = QPushButton("Marca no asistió")
         self.btn_cancelar.clicked.connect(self._cancelar)
         self.btn_noshow.clicked.connect(self._no_show)
         acciones.addWidget(self.btn_cancelar)
@@ -72,14 +75,14 @@ class AgendaTab(QWidget):
         acciones.addStretch()
         layout.addLayout(acciones)
 
-        layout.addWidget(QLabel("Crear cita"))
+        layout.addWidget(self._titulo_label("Crear cita"))
         form = QHBoxLayout()
         self.barbero_combo = QComboBox()
         self.servicio_combo = QComboBox()
         self.fecha_cita = QDateEdit(QDate.currentDate())
         self.fecha_cita.setCalendarPopup(True)
         self.hora_cita = QTimeEdit()
-        self.hora_cita.setDisplayFormat("HH:mm")
+        self.hora_cita.setDisplayFormat("hh:mm ap")
         self.hora_cita.setTime(QTime(9, 30))
         self.nombre_cliente = QLineEdit()
         self.nombre_cliente.setPlaceholderText("Nombre cliente")
@@ -132,12 +135,13 @@ class AgendaTab(QWidget):
         estado = None if self.estado_filtro.currentText() == "Todos" else self.estado_filtro.currentText()
         citas = repositories.list_appointments_by_range(inicio.isoformat(), fin.isoformat(), barber_id, estado)
         barberos = {b["id"]: b["name"] for b in repositories.list_barbers()}
+        servicios = {s["id"]: s["name"] for s in repositories.list_services(True)}
         self.tabla.setRowCount(0)
         for row, cita in enumerate(citas):
             self.tabla.insertRow(row)
             self.tabla.setItem(row, 0, QTableWidgetItem(str(cita["id"])))
-            self.tabla.setItem(row, 1, QTableWidgetItem(cita["start_dt"][11:16]))
-            self.tabla.setItem(row, 2, QTableWidgetItem(cita["end_dt"][11:16]))
+            self.tabla.setItem(row, 1, QTableWidgetItem(format_time_12h(cita["start_dt"])))
+            self.tabla.setItem(row, 2, QTableWidgetItem(format_time_12h(cita["end_dt"])))
             self.tabla.setItem(row, 3, QTableWidgetItem(barberos.get(cita["barber_id"], "")))
             cliente_nombre = ""
             if cita.get("client_id"):
@@ -145,8 +149,9 @@ class AgendaTab(QWidget):
                 if cliente:
                     cliente_nombre = cliente["name"]
             self.tabla.setItem(row, 4, QTableWidgetItem(cliente_nombre))
-            self.tabla.setItem(row, 5, QTableWidgetItem(cita["status"]))
-            self.tabla.setItem(row, 6, QTableWidgetItem(cita.get("notes") or ""))
+            self.tabla.setItem(row, 5, QTableWidgetItem(servicios.get(cita.get("primary_service_id"), "")))
+            self.tabla.setItem(row, 6, QTableWidgetItem(cita["status"]))
+            self.tabla.setItem(row, 7, QTableWidgetItem(cita.get("notes") or ""))
 
     def _crear_cita(self):
         try:
@@ -188,4 +193,15 @@ class AgendaTab(QWidget):
             return
         repositories.update_appointment_status(cid, "NO ASISTIÓ")
         self._cargar_citas()
+
+    def _titulo_label(self, texto: str) -> QLabel:
+        lbl = QLabel(texto)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet("font-size:16px; font-weight:bold;")
+        return lbl
+
+    def _estilizar_tabla(self, tabla: QTableWidget):
+        tabla.horizontalHeader().setStyleSheet(
+            "QHeaderView::section {background-color:#e3f2fd; font-weight:bold;}"
+        )
 

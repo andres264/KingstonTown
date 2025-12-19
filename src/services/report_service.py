@@ -1,19 +1,20 @@
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
-from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from ..database import db
 from ..utils import format_currency
+from .. import repositories
 
 
 class ReportService:
-    def resumen(self, inicio: datetime, fin: datetime) -> Dict:
+    def resumen(self, inicio: datetime, fin: datetime, barber_id: Optional[int] = None) -> Dict:
         conn = db.conn
         cur = conn.cursor()
         cur.execute(
@@ -23,15 +24,17 @@ class ReportService:
             JOIN appointments a ON p.appointment_id = a.id
             JOIN barbers b ON a.barber_id = b.id
             WHERE p.paid_at BETWEEN ? AND ?
+            {barber_filter}
             ORDER BY p.paid_at;
-            """,
-            (inicio.isoformat(), fin.isoformat()),
+            """.format(barber_filter="AND a.barber_id=?" if barber_id else ""),
+            (inicio.isoformat(), fin.isoformat()) + ((barber_id,) if barber_id else ()),
         )
         pagos = cur.fetchall()
 
         totales = {"ventas": 0.0, "barberos": 0.0, "barberia": 0.0}
-        por_barbero = defaultdict(lambda: {"ventas": 0.0, "barbero": 0.0, "barberia": 0.0})
+        por_barbero = defaultdict(lambda: {"ventas": 0.0, "barbero": 0.0, "barberia": 0.0, "servicios": []})
         por_dia = defaultdict(lambda: {"ventas": 0.0, "barbero": 0.0, "barberia": 0.0})
+        servicios_por_pago = defaultdict(list)
 
         for p in pagos:
             totales["ventas"] += p["total_amount"]
@@ -45,26 +48,59 @@ class ReportService:
             por_dia[dia]["barbero"] += p["barber_total"]
             por_dia[dia]["barberia"] += p["shop_total"]
 
-        citas_totales = self._contar_citas(inicio, fin)
+        # Traer líneas de servicios por pago para agregar nombres y qty
+        cur.execute(
+            """
+            SELECT p.appointment_id, a.barber_id, b.name as barber_name, l.qty, s.name as service_name
+            FROM payments p
+            JOIN appointments a ON p.appointment_id = a.id
+            JOIN barbers b ON a.barber_id = b.id
+            JOIN appointment_service_lines l ON l.appointment_id = p.appointment_id
+            JOIN services s ON s.id = l.service_id
+            WHERE p.paid_at BETWEEN ? AND ?
+            {barber_filter};
+            """.format(barber_filter="AND a.barber_id=?" if barber_id else ""),
+            (inicio.isoformat(), fin.isoformat()) + ((barber_id,) if barber_id else ()),
+        )
+        for row in cur.fetchall():
+            etiqueta = f"{row['service_name']} x{row['qty']}"
+            servicios_por_pago[row["appointment_id"]].append(etiqueta)
+            por_barbero[row["barber_name"]]["servicios"].append(etiqueta)
+
+        citas_totales = self._contar_citas(inicio, fin, barber_id)
+        pagos_detalle = []
+        for p in pagos:
+            pagos_detalle.append(
+                {
+                    "appointment_id": p["appointment_id"],
+                    "barber": p["barber_name"],
+                    "total": p["total_amount"],
+                    "servicios": ", ".join(servicios_por_pago.get(p["appointment_id"], [])),
+                    "fecha": p["paid_at"][:10],
+                }
+            )
         return {
             "pagos": [dict(p) for p in pagos],
             "totales": totales,
             "por_barbero": por_barbero,
             "por_dia": por_dia,
             "citas": citas_totales,
+            "pagos_detalle": pagos_detalle,
         }
 
-    def _contar_citas(self, inicio: datetime, fin: datetime) -> Dict[str, int]:
+    def _contar_citas(self, inicio: datetime, fin: datetime, barber_id: Optional[int]) -> Dict[str, int]:
         cur = db.conn.cursor()
-        cur.execute(
-            """
+        query = """
             SELECT status, COUNT(*) as total
             FROM appointments
             WHERE start_dt BETWEEN ? AND ?
-            GROUP BY status;
-            """,
-            (inicio.isoformat(), fin.isoformat()),
-        )
+        """
+        params = [inicio.isoformat(), fin.isoformat()]
+        if barber_id:
+            query += " AND barber_id=?"
+            params.append(barber_id)
+        query += " GROUP BY status;"
+        cur.execute(query, params)
         resumen = {"ATENDIDA": 0, "CANCELADA": 0, "NO ASISTIÓ": 0, "RESERVADA": 0}
         for row in cur.fetchall():
             resumen[row["status"]] = row["total"]
@@ -88,7 +124,7 @@ class ReportService:
 
         # Tabla por barbero
         if data["por_barbero"]:
-            tabla_data = [["Barbero", "Ventas", "Barbero", "Barbería"]]
+            tabla_data = [["Nombre Barbero", "Ventas", "Total Barbero", "Barbería", "Servicios"]]
             for barber, valores in data["por_barbero"].items():
                 tabla_data.append(
                     [
@@ -96,6 +132,7 @@ class ReportService:
                         format_currency(valores["ventas"]),
                         format_currency(valores["barbero"]),
                         format_currency(valores["barberia"]),
+                        ", ".join(valores.get("servicios", [])),
                     ]
                 )
             table = Table(tabla_data, hAlign="LEFT")
@@ -114,6 +151,10 @@ class ReportService:
         story.append(Spacer(1, 16))
         doc.build(story)
         return path
+
+    def borrar_cobro(self, appointment_id: int) -> None:
+        repositories.delete_payment(appointment_id)
+        repositories.update_appointment_status(appointment_id, "RESERVADA")
 
 
 report_service = ReportService()

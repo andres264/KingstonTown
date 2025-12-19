@@ -62,3 +62,13 @@ def to_iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
+def format_time_12h(iso_dt: str) -> str:
+    """Convierte un datetime ISO a formato 12h con am/pm."""
+    try:
+        dt = datetime.fromisoformat(iso_dt)
+        txt = dt.strftime("%I:%M %p").lower()
+        return txt.lstrip("0")
+    except Exception:
+        return iso_dt
+
+

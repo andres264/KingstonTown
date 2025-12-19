@@ -13,13 +13,13 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QSpinBox,
     QMessageBox,
+    QStyle,
 )
 
 from .. import repositories, config
 from ..services.payment_service import payment_service
-from ..utils import format_currency
-
-
+from ..utils import format_currency, format_time_12h
+from .widgets import titulo_label, estilizar_tabla
 class CobrosTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -29,6 +29,8 @@ class CobrosTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+
+        layout.addWidget(titulo_label("Cobros"))
 
         filtros = QHBoxLayout()
         filtros.addWidget(QLabel("Fecha"))
@@ -41,10 +43,11 @@ class CobrosTab(QWidget):
         filtros.addStretch()
         layout.addLayout(filtros)
 
-        self.tabla = QTableWidget(0, 5)
-        self.tabla.setHorizontalHeaderLabels(["ID", "Hora", "Barbero", "Estado", "Notas"])
+        self.tabla = QTableWidget(0, 6)
+        self.tabla.setHorizontalHeaderLabels(["ID", "Hora", "Barbero", "Cliente", "Estado", "Notas"])
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.itemSelectionChanged.connect(self._prefill_servicio_principal)
+        estilizar_tabla(self.tabla)
         layout.addWidget(self.tabla)
 
         form = QHBoxLayout()
@@ -61,9 +64,12 @@ class CobrosTab(QWidget):
         form.addStretch()
         layout.addLayout(form)
 
+        layout.addWidget(titulo_label("Servicios realizados"))
+
         self.lines_table = QTableWidget(0, 3)
         self.lines_table.setHorizontalHeaderLabels(["Servicio", "Cant.", "Subtotal"])
         self.lines_table.horizontalHeader().setStretchLastSection(True)
+        estilizar_tabla(self.lines_table)
         layout.addWidget(self.lines_table)
 
         pago_layout = QHBoxLayout()
@@ -90,14 +96,23 @@ class CobrosTab(QWidget):
         fin = datetime.combine(fecha, time(23, 59))
         citas = repositories.list_appointments_by_range(inicio.isoformat(), fin.isoformat(), None, "RESERVADA")
         barberos = {b["id"]: b["name"] for b in repositories.list_barbers()}
+        clientes_cache = {}
         self.tabla.setRowCount(0)
         for row, cita in enumerate(citas):
             self.tabla.insertRow(row)
             self.tabla.setItem(row, 0, QTableWidgetItem(str(cita["id"])))
-            self.tabla.setItem(row, 1, QTableWidgetItem(cita["start_dt"][11:16]))
+            self.tabla.setItem(row, 1, QTableWidgetItem(format_time_12h(cita["start_dt"])))
             self.tabla.setItem(row, 2, QTableWidgetItem(barberos.get(cita["barber_id"], "")))
-            self.tabla.setItem(row, 3, QTableWidgetItem(cita["status"]))
-            self.tabla.setItem(row, 4, QTableWidgetItem(cita.get("notes") or ""))
+            cliente_nombre = ""
+            if cita.get("client_id"):
+                if cita["client_id"] not in clientes_cache:
+                    clientes_cache[cita["client_id"]] = repositories.get_client(cita["client_id"])
+                cdata = clientes_cache[cita["client_id"]]
+                if cdata:
+                    cliente_nombre = cdata["name"]
+            self.tabla.setItem(row, 3, QTableWidgetItem(cliente_nombre))
+            self.tabla.setItem(row, 4, QTableWidgetItem(cita["status"]))
+            self.tabla.setItem(row, 5, QTableWidgetItem(cita.get("notes") or ""))
         self.lines_table.setRowCount(0)
 
     def _selected_appointment_id(self) -> int:
@@ -156,11 +171,14 @@ class CobrosTab(QWidget):
             return
         try:
             result = payment_service.cobrar(cita_id, servicios, self.metodo_pago.currentText())
-            QMessageBox.information(
-                self,
-                "Cobro registrado",
-                f"Total: {format_currency(result['total'])}\nBarbero: {format_currency(result['barbero'])}\nBarbería: {format_currency(result['barberia'])}",
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Cobro registrado")
+            msg.setText(
+                f"Total: {format_currency(result['total'])}\nBarbero: {format_currency(result['barbero'])}\nBarbería: {format_currency(result['barberia'])}"
             )
+            icono = self.style().standardIcon(QStyle.SP_DialogApplyButton)
+            msg.setIconPixmap(icono.pixmap(48, 48))
+            msg.exec()
             self._cargar_pendientes()
         except Exception as exc:
             QMessageBox.warning(self, "Error", str(exc))

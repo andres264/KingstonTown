@@ -13,11 +13,13 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QMessageBox,
+    QInputDialog,
 )
 
 from ..services.report_service import report_service
 from ..utils import format_currency
-from .. import config
+from .. import config, repositories
+from .widgets import titulo_label, estilizar_tabla
 
 
 class ReportesTab(QWidget):
@@ -25,9 +27,11 @@ class ReportesTab(QWidget):
         super().__init__()
         self._build_ui()
         self._aplicar_rango_rapido("Hoy")
+        self._cargar_barberos()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.addWidget(titulo_label("Reportes"))
         controles = QHBoxLayout()
         controles.addWidget(QLabel("Rango"))
         self.rango_combo = QComboBox()
@@ -43,6 +47,9 @@ class ReportesTab(QWidget):
         controles.addWidget(self.fecha_inicio)
         controles.addWidget(QLabel("Fin"))
         controles.addWidget(self.fecha_fin)
+        controles.addWidget(QLabel("Barbero"))
+        self.barbero_combo = QComboBox()
+        controles.addWidget(self.barbero_combo)
         self.btn_generar = QPushButton("Generar")
         self.btn_generar.clicked.connect(self._generar)
         controles.addWidget(self.btn_generar)
@@ -55,15 +62,31 @@ class ReportesTab(QWidget):
         self.resumen_label = QLabel("Totales")
         layout.addWidget(self.resumen_label)
 
-        self.tabla_barbero = QTableWidget(0, 4)
-        self.tabla_barbero.setHorizontalHeaderLabels(["Barbero", "Ventas", "Barbero", "Barbería"])
+        self.tabla_barbero = QTableWidget(0, 5)
+        self.tabla_barbero.setHorizontalHeaderLabels(["Nombre Barbero", "Ventas", "Total Barbero", "Barbería", "Servicios"])
         self.tabla_barbero.horizontalHeader().setStretchLastSection(True)
+        estilizar_tabla(self.tabla_barbero)
         layout.addWidget(self.tabla_barbero)
 
         self.tabla_dias = QTableWidget(0, 4)
         self.tabla_dias.setHorizontalHeaderLabels(["Fecha", "Ventas", "Barbero", "Barbería"])
         self.tabla_dias.horizontalHeader().setStretchLastSection(True)
+        estilizar_tabla(self.tabla_dias)
         layout.addWidget(self.tabla_dias)
+
+        layout.addWidget(titulo_label("Cobros realizados"))
+        self.tabla_cobros = QTableWidget(0, 5)
+        self.tabla_cobros.setHorizontalHeaderLabels(["ID Cita", "Fecha", "Barbero", "Total", "Servicios"])
+        self.tabla_cobros.horizontalHeader().setStretchLastSection(True)
+        estilizar_tabla(self.tabla_cobros)
+        layout.addWidget(self.tabla_cobros)
+
+        acciones = QHBoxLayout()
+        self.btn_borrar = QPushButton("Borrar cobro")
+        self.btn_borrar.clicked.connect(self._borrar_cobro)
+        acciones.addWidget(self.btn_borrar)
+        acciones.addStretch()
+        layout.addLayout(acciones)
 
     def _on_rango_change(self, texto: str):
         if texto != "Personalizado":
@@ -87,16 +110,18 @@ class ReportesTab(QWidget):
     def _generar(self):
         inicio_dt = datetime.combine(self.fecha_inicio.date().toPython(), datetime.min.time())
         fin_dt = datetime.combine(self.fecha_fin.date().toPython(), datetime.max.time())
-        data = report_service.resumen(inicio_dt, fin_dt)
+        barber_id = self.barbero_combo.currentData()
+        data = report_service.resumen(inicio_dt, fin_dt, barber_id)
         tot = data["totales"]
         self.resumen_label.setText(
             f"Ventas: {format_currency(tot['ventas'])} | Barberos: {format_currency(tot['barberos'])} | Barbería: {format_currency(tot['barberia'])}"
         )
-        self._llenar_tabla(self.tabla_barbero, data["por_barbero"])
-        self._llenar_tabla(self.tabla_dias, data["por_dia"])
-        self._ultimo_resumen = (inicio_dt, fin_dt, data)
+        self._llenar_tabla(self.tabla_barbero, data["por_barbero"], True)
+        self._llenar_tabla(self.tabla_dias, data["por_dia"], False)
+        self._llenar_cobros(data.get("pagos_detalle", []))
+        self._ultimo_resumen = (inicio_dt, fin_dt, data, barber_id)
 
-    def _llenar_tabla(self, tabla: QTableWidget, data_map):
+    def _llenar_tabla(self, tabla: QTableWidget, data_map, incluir_servicios: bool):
         tabla.setRowCount(0)
         for idx, (key, valores) in enumerate(data_map.items()):
             tabla.insertRow(idx)
@@ -104,14 +129,57 @@ class ReportesTab(QWidget):
             tabla.setItem(idx, 1, QTableWidgetItem(format_currency(valores["ventas"])))
             tabla.setItem(idx, 2, QTableWidgetItem(format_currency(valores["barbero"])))
             tabla.setItem(idx, 3, QTableWidgetItem(format_currency(valores["barberia"])))
+            if incluir_servicios:
+                tabla.setItem(idx, 4, QTableWidgetItem(", ".join(valores.get("servicios", []))))
 
     def _exportar_pdf(self):
         if not hasattr(self, "_ultimo_resumen"):
             QMessageBox.warning(self, "Sin datos", "Genere un reporte primero")
             return
-        inicio, fin, data = self._ultimo_resumen
+        inicio, fin, data, _ = self._ultimo_resumen
         path = config.BASE_DIR / "reporte.pdf"
         report_service.exportar_pdf(path, data, "Reporte Barbería", (inicio, fin))
         QMessageBox.information(self, "PDF generado", f"Archivo: {path}")
+
+    def _llenar_cobros(self, pagos_detalle):
+        self.tabla_cobros.setRowCount(0)
+        for idx, pago in enumerate(pagos_detalle):
+            self.tabla_cobros.insertRow(idx)
+            self.tabla_cobros.setItem(idx, 0, QTableWidgetItem(str(pago["appointment_id"])))
+            self.tabla_cobros.setItem(idx, 1, QTableWidgetItem(pago["fecha"]))
+            self.tabla_cobros.setItem(idx, 2, QTableWidgetItem(pago["barber"]))
+            self.tabla_cobros.setItem(idx, 3, QTableWidgetItem(format_currency(pago["total"])))
+            self.tabla_cobros.setItem(idx, 4, QTableWidgetItem(pago.get("servicios", "")))
+
+    def _borrar_cobro(self):
+        if not self.tabla_cobros.rowCount():
+            return
+        row = self.tabla_cobros.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Seleccione", "Seleccione un cobro de la lista")
+            return
+        cid_item = self.tabla_cobros.item(row, 0)
+        if not cid_item:
+            return
+        appointment_id = int(cid_item.text())
+        pwd, ok = QInputDialog.getText(self, "Contraseña requerida", "Ingrese contraseña para borrar:", QInputDialog.Password)
+        if not ok:
+            return
+        if pwd != "Kingston2025":
+            QMessageBox.warning(self, "No autorizado", "Contraseña incorrecta")
+            return
+        try:
+            report_service.borrar_cobro(appointment_id)
+            QMessageBox.information(self, "Cobro eliminado", "El cobro fue eliminado y la cita volvió a RESERVADA")
+            # regenerar para reflejar cambios
+            self._generar()
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+
+    def _cargar_barberos(self):
+        self.barbero_combo.clear()
+        self.barbero_combo.addItem("Todos", None)
+        for b in repositories.list_barbers():
+            self.barbero_combo.addItem(b["name"], b["id"])
 
 

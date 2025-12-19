@@ -165,3 +165,4 @@ class CobrosTab(QWidget):
         except Exception as exc:
             QMessageBox.warning(self, "Error", str(exc))
 
+

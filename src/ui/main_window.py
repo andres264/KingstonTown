@@ -23,3 +23,4 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(container)
 
+

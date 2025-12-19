@@ -114,3 +114,4 @@ class ReportesTab(QWidget):
         report_service.exportar_pdf(path, data, "Reporte Barbería", (inicio, fin))
         QMessageBox.information(self, "PDF generado", f"Archivo: {path}")
 
+

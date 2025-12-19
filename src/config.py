@@ -38,3 +38,4 @@ DEFAULT_SERVICES = [
     ("Mascarilla negra", 2000, 0, 2000, 15, 1),
 ]
 
+

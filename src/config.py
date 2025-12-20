@@ -1,8 +1,13 @@
 import os
+import sys
 from pathlib import Path
 
-# Rutas principales
-BASE_DIR = Path(__file__).resolve().parent
+# Rutas principales (soporta app empaquetada con PyInstaller)
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+
 DB_PATH = BASE_DIR / "barberia.db"
 BACKUP_DIR = BASE_DIR / "backups"
 LOGO_PATH = BASE_DIR / "logo_barberia.png"

@@ -32,9 +32,9 @@ def update_barber(barber_id: int, name: str, active: bool) -> None:
 def list_services(include_inactive: bool = False) -> List[dict]:
     cur = db.conn.cursor()
     if include_inactive:
-        cur.execute("SELECT * FROM services ORDER BY active DESC, name;")
+        cur.execute("SELECT * FROM services ORDER BY active DESC, id;")
     else:
-        cur.execute("SELECT * FROM services WHERE active=1 ORDER BY name;")
+        cur.execute("SELECT * FROM services WHERE active=1 ORDER BY id;")
     return [dict(r) for r in cur.fetchall()]
 
 

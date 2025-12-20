@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
@@ -107,7 +107,7 @@ class ReportService:
         return resumen
 
     def exportar_pdf(self, path: Path, data: Dict, titulo: str, rango: Tuple[datetime, datetime]) -> Path:
-        doc = SimpleDocTemplate(str(path), pagesize=letter)
+        doc = SimpleDocTemplate(str(path), pagesize=landscape(letter))
         styles = getSampleStyleSheet()
         story = []
         story.append(Paragraph(titulo, styles["Title"]))

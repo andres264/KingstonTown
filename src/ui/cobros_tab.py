@@ -1,6 +1,6 @@
 from datetime import datetime, time
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QMessageBox,
     QStyle,
+    QHeaderView,
 )
 
 from .. import repositories, config
@@ -30,7 +31,7 @@ class CobrosTab(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
-        layout.addWidget(titulo_label("Cobros"))
+        layout.addWidget(titulo_label("Cobros pendientes"))
 
         filtros = QHBoxLayout()
         filtros.addWidget(QLabel("Fecha"))
@@ -45,7 +46,9 @@ class CobrosTab(QWidget):
 
         self.tabla = QTableWidget(0, 6)
         self.tabla.setHorizontalHeaderLabels(["ID", "Hora", "Barbero", "Cliente", "Estado", "Notas"])
-        self.tabla.horizontalHeader().setStretchLastSection(True)
+        header = self.tabla.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QHeaderView.Stretch)
         self.tabla.itemSelectionChanged.connect(self._prefill_servicio_principal)
         estilizar_tabla(self.tabla)
         layout.addWidget(self.tabla)
@@ -68,9 +71,18 @@ class CobrosTab(QWidget):
 
         self.lines_table = QTableWidget(0, 3)
         self.lines_table.setHorizontalHeaderLabels(["Servicio", "Cant.", "Subtotal"])
-        self.lines_table.horizontalHeader().setStretchLastSection(True)
+        header2 = self.lines_table.horizontalHeader()
+        header2.setStretchLastSection(True)
+        header2.setSectionResizeMode(QHeaderView.Stretch)
         estilizar_tabla(self.lines_table)
         layout.addWidget(self.lines_table)
+
+        acciones_lineas = QHBoxLayout()
+        self.btn_eliminar_linea = QPushButton("Quitar servicio seleccionado")
+        self.btn_eliminar_linea.clicked.connect(self._eliminar_linea)
+        acciones_lineas.addWidget(self.btn_eliminar_linea)
+        acciones_lineas.addStretch()
+        layout.addLayout(acciones_lineas)
 
         pago_layout = QHBoxLayout()
         pago_layout.addWidget(QLabel("Método de pago"))
@@ -100,9 +112,9 @@ class CobrosTab(QWidget):
         self.tabla.setRowCount(0)
         for row, cita in enumerate(citas):
             self.tabla.insertRow(row)
-            self.tabla.setItem(row, 0, QTableWidgetItem(str(cita["id"])))
-            self.tabla.setItem(row, 1, QTableWidgetItem(format_time_12h(cita["start_dt"])))
-            self.tabla.setItem(row, 2, QTableWidgetItem(barberos.get(cita["barber_id"], "")))
+            self._set_cell(self.tabla, row, 0, str(cita["id"]))
+            self._set_cell(self.tabla, row, 1, format_time_12h(cita["start_dt"]))
+            self._set_cell(self.tabla, row, 2, barberos.get(cita["barber_id"], ""))
             cliente_nombre = ""
             if cita.get("client_id"):
                 if cita["client_id"] not in clientes_cache:
@@ -110,9 +122,9 @@ class CobrosTab(QWidget):
                 cdata = clientes_cache[cita["client_id"]]
                 if cdata:
                     cliente_nombre = cdata["name"]
-            self.tabla.setItem(row, 3, QTableWidgetItem(cliente_nombre))
-            self.tabla.setItem(row, 4, QTableWidgetItem(cita["status"]))
-            self.tabla.setItem(row, 5, QTableWidgetItem(cita.get("notes") or ""))
+            self._set_cell(self.tabla, row, 3, cliente_nombre, Qt.AlignCenter)
+            self._set_cell(self.tabla, row, 4, cita["status"])
+            self._set_cell(self.tabla, row, 5, cita.get("notes") or "", Qt.AlignLeft | Qt.AlignVCenter)
         self.lines_table.setRowCount(0)
 
     def _selected_appointment_id(self) -> int:
@@ -144,10 +156,10 @@ class CobrosTab(QWidget):
     def _add_line(self, servicio: dict, qty: int):
         row = self.lines_table.rowCount()
         self.lines_table.insertRow(row)
-        self.lines_table.setItem(row, 0, QTableWidgetItem(servicio["name"]))
-        self.lines_table.setItem(row, 1, QTableWidgetItem(str(qty)))
+        self._set_cell(self.lines_table, row, 0, servicio["name"], Qt.AlignCenter)
+        self._set_cell(self.lines_table, row, 1, str(qty))
         subtotal = servicio["price"] * qty
-        self.lines_table.setItem(row, 2, QTableWidgetItem(format_currency(subtotal)))
+        self._set_cell(self.lines_table, row, 2, format_currency(subtotal))
         self.lines_table.resizeColumnsToContents()
 
     def _build_payload(self):
@@ -159,6 +171,17 @@ class CobrosTab(QWidget):
             if servicio:
                 servicios.append({"service_id": servicio["id"], "qty": qty})
         return servicios
+
+    def _eliminar_linea(self):
+        row = self.lines_table.currentRow()
+        if row < 0:
+            return
+        self.lines_table.removeRow(row)
+
+    def _set_cell(self, tabla: QTableWidget, row: int, col: int, text: str, align=Qt.AlignCenter):
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(align)
+        tabla.setItem(row, col, item)
 
     def _cobrar(self):
         cita_id = self._selected_appointment_id()

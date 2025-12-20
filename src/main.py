@@ -1,6 +1,7 @@
 import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QIcon
 
 from . import config
 from .database import db
@@ -19,6 +20,8 @@ def main():
         raise
 
     app = QApplication(sys.argv)
+    if config.LOGO_PATH.exists():
+        app.setWindowIcon(QIcon(str(config.LOGO_PATH)))
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

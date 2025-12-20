@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
                 color: #000000;
                 gridline-color: #cccccc;
             }
-            QTableWidget::item:selected { background-color: #e0f2ff; }
+            QTableWidget::item:selected { background-color: #e0f2ff; color: #000000; }
             QLineEdit, QComboBox, QDateEdit, QTimeEdit, QSpinBox, QDoubleSpinBox, QTextEdit {
                 background-color: #ffffff;
                 color: #000000;

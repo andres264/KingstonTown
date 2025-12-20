@@ -15,6 +15,10 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QTextEdit,
+    QDialog,
+    QFormLayout,
+    QDialogButtonBox,
+    QHeaderView,
 )
 
 from .. import repositories
@@ -61,71 +65,34 @@ class AgendaTab(QWidget):
         self.tabla.setHorizontalHeaderLabels(
             ["ID", "Inicio", "Fin", "Barbero", "Cliente", "Servicio", "Estado", "Notas"]
         )
-        self.tabla.horizontalHeader().setStretchLastSection(True)
+        header = self.tabla.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QHeaderView.Stretch)
         self._estilizar_tabla(self.tabla)
         layout.addWidget(self.tabla)
 
         acciones = QHBoxLayout()
         self.btn_cancelar = QPushButton("Cancelar cita")
         self.btn_noshow = QPushButton("Marca no asistió")
+        self.btn_agendar = QPushButton("Agendar cita")
+        self.btn_eliminar = QPushButton("Eliminar cita")
         self.btn_cancelar.clicked.connect(self._cancelar)
         self.btn_noshow.clicked.connect(self._no_show)
+        self.btn_agendar.clicked.connect(self._abrir_dialogo_cita)
+        self.btn_eliminar.clicked.connect(self._eliminar_cita)
+        acciones.addWidget(self.btn_agendar)
         acciones.addWidget(self.btn_cancelar)
+        acciones.addWidget(self.btn_eliminar)
         acciones.addWidget(self.btn_noshow)
         acciones.addStretch()
         layout.addLayout(acciones)
 
-        layout.addWidget(self._titulo_label("Crear cita"))
-        form = QHBoxLayout()
-        self.barbero_combo = QComboBox()
-        self.servicio_combo = QComboBox()
-        self.fecha_cita = QDateEdit(QDate.currentDate())
-        self.fecha_cita.setCalendarPopup(True)
-        self.hora_cita = QTimeEdit()
-        self.hora_cita.setDisplayFormat("hh:mm ap")
-        self.hora_cita.setTime(QTime(9, 30))
-        self.nombre_cliente = QLineEdit()
-        self.nombre_cliente.setPlaceholderText("Nombre cliente")
-        self.tel_cliente = QLineEdit()
-        self.tel_cliente.setPlaceholderText("Teléfono (opcional)")
-        self.notas = QTextEdit()
-        self.notas.setPlaceholderText("Notas")
-        self.notas.setFixedHeight(60)
-        self.btn_crear = QPushButton("Crear")
-        self.btn_crear.clicked.connect(self._crear_cita)
-
-        form.addWidget(QLabel("Barbero"))
-        form.addWidget(self.barbero_combo)
-        form.addWidget(QLabel("Servicio"))
-        form.addWidget(self.servicio_combo)
-        form.addWidget(QLabel("Fecha"))
-        form.addWidget(self.fecha_cita)
-        form.addWidget(QLabel("Hora"))
-        form.addWidget(self.hora_cita)
-        form.addWidget(self.btn_crear)
-        layout.addLayout(form)
-
-        detalle = QHBoxLayout()
-        detalle.addWidget(QLabel("Cliente"))
-        detalle.addWidget(self.nombre_cliente)
-        detalle.addWidget(QLabel("Teléfono"))
-        detalle.addWidget(self.tel_cliente)
-        detalle.addWidget(QLabel("Notas"))
-        detalle.addWidget(self.notas)
-        layout.addLayout(detalle)
-
     def _load_comboboxes(self):
-        self.barbero_combo.clear()
         self.barbero_filtro.clear()
         self.barbero_filtro.addItem("Todos", None)
         for b in repositories.list_barbers():
-            self.barbero_combo.addItem(b["name"], b["id"])
             if b["active"]:
                 self.barbero_filtro.addItem(b["name"], b["id"])
-
-        self.servicio_combo.clear()
-        for s in repositories.list_services():
-            self.servicio_combo.addItem(f"{s['name']} ({format_currency(s['price'])})", s["id"])
 
     def _cargar_citas(self):
         fecha = self.fecha_filtro.date().toPython()
@@ -139,39 +106,19 @@ class AgendaTab(QWidget):
         self.tabla.setRowCount(0)
         for row, cita in enumerate(citas):
             self.tabla.insertRow(row)
-            self.tabla.setItem(row, 0, QTableWidgetItem(str(cita["id"])))
-            self.tabla.setItem(row, 1, QTableWidgetItem(format_time_12h(cita["start_dt"])))
-            self.tabla.setItem(row, 2, QTableWidgetItem(format_time_12h(cita["end_dt"])))
-            self.tabla.setItem(row, 3, QTableWidgetItem(barberos.get(cita["barber_id"], "")))
+            self._set_cell(self.tabla, row, 0, str(cita["id"]))
+            self._set_cell(self.tabla, row, 1, format_time_12h(cita["start_dt"]))
+            self._set_cell(self.tabla, row, 2, format_time_12h(cita["end_dt"]))
+            self._set_cell(self.tabla, row, 3, barberos.get(cita["barber_id"], ""))
             cliente_nombre = ""
             if cita.get("client_id"):
                 cliente = repositories.get_client(cita["client_id"])
                 if cliente:
                     cliente_nombre = cliente["name"]
-            self.tabla.setItem(row, 4, QTableWidgetItem(cliente_nombre))
-            self.tabla.setItem(row, 5, QTableWidgetItem(servicios.get(cita.get("primary_service_id"), "")))
-            self.tabla.setItem(row, 6, QTableWidgetItem(cita["status"]))
-            self.tabla.setItem(row, 7, QTableWidgetItem(cita.get("notes") or ""))
-
-    def _crear_cita(self):
-        try:
-            barber_id = self.barbero_combo.currentData()
-            servicio_id = self.servicio_combo.currentData()
-            fecha = self.fecha_cita.date().toPython()
-            hora = self.hora_cita.time().toPython()
-            inicio = datetime.combine(fecha, hora)
-            agenda_service.crear_cita(
-                barber_id=barber_id,
-                client_name=self.nombre_cliente.text().strip() or None,
-                client_phone=self.tel_cliente.text().strip() or None,
-                servicio_principal_id=servicio_id,
-                fecha=inicio,
-                notas=self.notas.toPlainText().strip() or None,
-            )
-            QMessageBox.information(self, "Éxito", "Cita creada")
-            self._cargar_citas()
-        except Exception as exc:
-            QMessageBox.warning(self, "Error", str(exc))
+            self._set_cell(self.tabla, row, 4, cliente_nombre, Qt.AlignCenter)
+            self._set_cell(self.tabla, row, 5, servicios.get(cita.get("primary_service_id"), ""))
+            self._set_cell(self.tabla, row, 6, cita["status"])
+            self._set_cell(self.tabla, row, 7, cita.get("notes") or "", Qt.AlignLeft | Qt.AlignVCenter)
 
     def _selected_id(self) -> int:
         row = self.tabla.currentRow()
@@ -194,6 +141,20 @@ class AgendaTab(QWidget):
         repositories.update_appointment_status(cid, "NO ASISTIÓ")
         self._cargar_citas()
 
+    def _eliminar_cita(self):
+        cid = self._selected_id()
+        if not cid:
+            QMessageBox.warning(self, "Seleccione", "Seleccione una cita")
+            return
+        pago = repositories.get_payment_with_lines(cid)
+        if pago:
+            QMessageBox.warning(self, "No permitido", "No puede eliminar una cita que ya tiene cobro")
+            return
+        resp = QMessageBox.question(self, "Confirmar", "¿Desea eliminar la cita seleccionada?")
+        if resp == QMessageBox.StandardButton.Yes:
+            repositories.delete_appointment(cid)
+            self._cargar_citas()
+
     def _titulo_label(self, texto: str) -> QLabel:
         lbl = QLabel(texto)
         lbl.setAlignment(Qt.AlignCenter)
@@ -204,4 +165,73 @@ class AgendaTab(QWidget):
         tabla.horizontalHeader().setStyleSheet(
             "QHeaderView::section {background-color:#e3f2fd; font-weight:bold;}"
         )
+
+    def _set_cell(self, tabla: QTableWidget, row: int, col: int, text: str, align=Qt.AlignCenter):
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(align)
+        tabla.setItem(row, col, item)
+
+    def _abrir_dialogo_cita(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Agendar cita")
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+
+        cb_barbero = QComboBox()
+        for b in repositories.list_barbers():
+            cb_barbero.addItem(b["name"], b["id"])
+
+        cb_servicio = QComboBox()
+        for s in repositories.list_services():
+            cb_servicio.addItem(f"{s['name']} ({format_currency(s['price'])})", s["id"])
+
+        de_fecha = QDateEdit(QDate.currentDate())
+        de_fecha.setCalendarPopup(True)
+        te_hora = QTimeEdit()
+        te_hora.setDisplayFormat("hh:mm ap")
+        te_hora.setTime(QTime(9, 30))
+        le_cliente = QLineEdit()
+        le_cliente.setPlaceholderText("Nombre cliente")
+        le_tel = QLineEdit()
+        le_tel.setPlaceholderText("Teléfono (opcional)")
+        te_notas = QTextEdit()
+        te_notas.setPlaceholderText("Notas")
+        te_notas.setFixedHeight(60)
+
+        form.addRow("Barbero", cb_barbero)
+        form.addRow("Servicio", cb_servicio)
+        form.addRow("Fecha", de_fecha)
+        form.addRow("Hora", te_hora)
+        form.addRow("Cliente", le_cliente)
+        form.addRow("Teléfono", le_tel)
+        form.addRow("Notas", te_notas)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        def crear_cita():
+            try:
+                barber_id = cb_barbero.currentData()
+                servicio_id = cb_servicio.currentData()
+                fecha = de_fecha.date().toPython()
+                hora = te_hora.time().toPython()
+                inicio = datetime.combine(fecha, hora)
+                agenda_service.crear_cita(
+                    barber_id=barber_id,
+                    client_name=le_cliente.text().strip() or None,
+                    client_phone=le_tel.text().strip() or None,
+                    servicio_principal_id=servicio_id,
+                    fecha=inicio,
+                    notas=te_notas.toPlainText().strip() or None,
+                )
+                QMessageBox.information(self, "Éxito", "Cita creada")
+                dialog.accept()
+                self._cargar_citas()
+            except Exception as exc:
+                QMessageBox.warning(self, "Error", str(exc))
+
+        buttons.accepted.connect(crear_cita)
+        buttons.rejected.connect(dialog.reject)
+        dialog.exec()
 

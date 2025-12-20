@@ -40,6 +40,7 @@ class ConfiguracionTab(QWidget):
         self.tabla_barberos.setHorizontalHeaderLabels(["ID", "Nombre", "Activo"])
         estilizar_tabla(self.tabla_barberos)
         layout.addWidget(self.tabla_barberos)
+        layout.addSpacing(12)
         form_barbero = QHBoxLayout()
         self.input_barbero = QLineEdit()
         self.input_barbero.setPlaceholderText("Nombre del barbero")
@@ -93,6 +94,7 @@ class ConfiguracionTab(QWidget):
         form_serv.addWidget(btn_serv)
         form_serv.addWidget(self.btn_actualizar_serv)
         layout.addLayout(form_serv)
+        layout.addSpacing(12)
 
         layout.addWidget(titulo_label("Descansos por barbero"))
         descanso = QHBoxLayout()

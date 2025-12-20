@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QMessageBox,
     QInputDialog,
+    QLineEdit,
 )
 
 from ..services.report_service import report_service
@@ -62,14 +63,16 @@ class ReportesTab(QWidget):
         self.resumen_label = QLabel("Totales")
         layout.addWidget(self.resumen_label)
 
+        layout.addWidget(titulo_label("Detalle por servicio"))
         self.tabla_barbero = QTableWidget(0, 5)
         self.tabla_barbero.setHorizontalHeaderLabels(["Nombre Barbero", "Ventas", "Total Barbero", "Barbería", "Servicios"])
         self.tabla_barbero.horizontalHeader().setStretchLastSection(True)
         estilizar_tabla(self.tabla_barbero)
         layout.addWidget(self.tabla_barbero)
 
+        layout.addWidget(titulo_label("Totales generales"))
         self.tabla_dias = QTableWidget(0, 4)
-        self.tabla_dias.setHorizontalHeaderLabels(["Fecha", "Ventas", "Barbero", "Barbería"])
+        self.tabla_dias.setHorizontalHeaderLabels(["Fecha", "Ventas", "Ganancia Total Barberos", "Ganancia Total Barbería"])
         self.tabla_dias.horizontalHeader().setStretchLastSection(True)
         estilizar_tabla(self.tabla_dias)
         layout.addWidget(self.tabla_dias)
@@ -162,7 +165,7 @@ class ReportesTab(QWidget):
         if not cid_item:
             return
         appointment_id = int(cid_item.text())
-        pwd, ok = QInputDialog.getText(self, "Contraseña requerida", "Ingrese contraseña para borrar:", QInputDialog.Password)
+        pwd, ok = QInputDialog.getText(self, "Contraseña requerida", "Ingrese contraseña para borrar:", QLineEdit.Password)
         if not ok:
             return
         if pwd != "Kingston2025":

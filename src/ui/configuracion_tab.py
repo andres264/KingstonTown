@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QCheckBox,
     QAbstractItemView,
+    QTextEdit,
+    QMessageBox,
 )
 
 from .. import repositories, config
@@ -48,9 +50,13 @@ class ConfiguracionTab(QWidget):
         self.check_barbero_activo.setChecked(True)
         btn_agregar_barbero = QPushButton("Agregar/Actualizar")
         btn_agregar_barbero.clicked.connect(self._guardar_barbero)
+        btn_eliminar_barbero = QPushButton("Eliminar barbero")
+        btn_eliminar_barbero.clicked.connect(self._eliminar_barbero)
+        self.tabla_barberos.itemSelectionChanged.connect(self._rellenar_barbero_form)
         form_barbero.addWidget(self.input_barbero)
         form_barbero.addWidget(self.check_barbero_activo)
         form_barbero.addWidget(btn_agregar_barbero)
+        form_barbero.addWidget(btn_eliminar_barbero)
         form_barbero.addStretch()
         layout.addLayout(form_barbero)
 
@@ -99,24 +105,33 @@ class ConfiguracionTab(QWidget):
         layout.addWidget(titulo_label("Descansos por barbero"))
         descanso = QHBoxLayout()
         self.combo_descanso_barbero = QComboBox()
+        self.combo_descanso_barbero.setMinimumWidth(150)
         self.combo_descanso_barbero.currentIndexChanged.connect(self._cargar_descansos)
         self.fecha_descanso = QDateEdit(QDate.currentDate())
         self.fecha_descanso.setCalendarPopup(True)
+        self.fecha_descanso.setMinimumWidth(130)
+        self.nota_descanso = QLineEdit()
+        self.nota_descanso.setPlaceholderText("Nota (opcional)")
         self.btn_agregar_descanso = QPushButton("Marcar descanso")
         self.btn_eliminar_descanso = QPushButton("Quitar descanso")
+        self.btn_limpiar_descansos = QPushButton("Limpiar descansos")
         self.btn_agregar_descanso.clicked.connect(self._agregar_descanso)
         self.btn_eliminar_descanso.clicked.connect(self._eliminar_descanso)
+        self.btn_limpiar_descansos.clicked.connect(self._limpiar_descansos)
         descanso.addWidget(QLabel("Barbero"))
         descanso.addWidget(self.combo_descanso_barbero)
         descanso.addWidget(QLabel("Fecha"))
         descanso.addWidget(self.fecha_descanso)
+        descanso.addWidget(QLabel("Nota"))
+        descanso.addWidget(self.nota_descanso)
         descanso.addWidget(self.btn_agregar_descanso)
         descanso.addWidget(self.btn_eliminar_descanso)
+        descanso.addWidget(self.btn_limpiar_descansos)
         descanso.addStretch()
         layout.addLayout(descanso)
 
-        self.tabla_descansos = QTableWidget(0, 2)
-        self.tabla_descansos.setHorizontalHeaderLabels(["Fecha", "Nota"])
+        self.tabla_descansos = QTableWidget(0, 3)
+        self.tabla_descansos.setHorizontalHeaderLabels(["Barbero", "Fecha", "Nota"])
         layout.addWidget(self.tabla_descansos)
 
     def _cargar_barberos(self):
@@ -129,6 +144,7 @@ class ConfiguracionTab(QWidget):
             self.tabla_barberos.setItem(idx, 1, QTableWidgetItem(b["name"]))
             self.tabla_barberos.setItem(idx, 2, QTableWidgetItem("Sí" if b["active"] else "No"))
             self.combo_descanso_barbero.addItem(b["name"], b["id"])
+        self.tabla_barberos.resizeColumnsToContents()
 
     def _guardar_barbero(self):
         nombre = self.input_barbero.text().strip()
@@ -145,6 +161,35 @@ class ConfiguracionTab(QWidget):
             repositories.create_barber(nombre, activo)
         self.input_barbero.clear()
         self._cargar_barberos()
+
+    def _eliminar_barbero(self):
+        row = self.tabla_barberos.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "Seleccione", "Seleccione un barbero para eliminar")
+            return
+        barber_id = int(self.tabla_barberos.item(row, 0).text())
+        nombre = self.tabla_barberos.item(row, 1).text()
+        resp = QMessageBox.question(self, "Confirmar", f"¿Eliminar al barbero '{nombre}'?")
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            # Nota: si hay FK de citas, esto puede fallar; aquí asumimos borrado simple
+            cur = repositories.db.conn.cursor()
+            cur.execute("DELETE FROM barbers WHERE id=?;", (barber_id,))
+            repositories.db.conn.commit()
+            self.input_barbero.clear()
+            self.check_barbero_activo.setChecked(True)
+            self._cargar_barberos()
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", str(exc))
+
+    def _rellenar_barbero_form(self):
+        row = self.tabla_barberos.currentRow()
+        if row < 0:
+            return
+        self.input_barbero.setText(self.tabla_barberos.item(row, 1).text())
+        activo_text = self.tabla_barberos.item(row, 2).text()
+        self.check_barbero_activo.setChecked(activo_text.lower().startswith("s"))
 
     def _cargar_servicios(self):
         servicios = repositories.list_services(include_inactive=True)
@@ -221,10 +266,12 @@ class ConfiguracionTab(QWidget):
             return
         descansos = repositories.list_days_off(barber_id)
         self.tabla_descansos.setRowCount(0)
+        barberos_map = {b["id"]: b["name"] for b in repositories.list_barbers(include_inactive=True)}
         for idx, d in enumerate(descansos):
             self.tabla_descansos.insertRow(idx)
-            self.tabla_descansos.setItem(idx, 0, QTableWidgetItem(d["off_date"]))
-            self.tabla_descansos.setItem(idx, 1, QTableWidgetItem(d.get("note") or ""))
+            self.tabla_descansos.setItem(idx, 0, QTableWidgetItem(barberos_map.get(d["barber_id"], "")))
+            self.tabla_descansos.setItem(idx, 1, QTableWidgetItem(d["off_date"]))
+            self.tabla_descansos.setItem(idx, 2, QTableWidgetItem(d.get("note") or ""))
 
     def _agregar_descanso(self):
         barber_id = self.combo_descanso_barbero.currentData()
@@ -234,7 +281,9 @@ class ConfiguracionTab(QWidget):
             QMessageBox.warning(self, "No permitido", "Hay citas en esa fecha. Reprograme o cancele antes de marcar descanso.")
             return
         try:
-            repositories.add_day_off(barber_id, fecha)
+            nota = self.nota_descanso.text().strip() or None
+            repositories.add_day_off(barber_id, fecha, nota)
+            self.nota_descanso.clear()
             self._cargar_descansos()
         except Exception as exc:
             QMessageBox.warning(self, "Error", str(exc))
@@ -243,5 +292,12 @@ class ConfiguracionTab(QWidget):
         barber_id = self.combo_descanso_barbero.currentData()
         fecha = self.fecha_descanso.date().toPython()
         repositories.remove_day_off(barber_id, fecha)
+        self._cargar_descansos()
+
+    def _limpiar_descansos(self):
+        resp = QMessageBox.question(self, "Confirmar", "¿Desea eliminar todos los descansos registrados?")
+        if resp != QMessageBox.StandardButton.Yes:
+            return
+        repositories.remove_all_days_off()
         self._cargar_descansos()
 

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QLineEdit,
+    QHeaderView,
 )
 
 from ..services.report_service import report_service
@@ -73,7 +74,9 @@ class ReportesTab(QWidget):
         layout.addWidget(titulo_label("Totales generales"))
         self.tabla_dias = QTableWidget(0, 4)
         self.tabla_dias.setHorizontalHeaderLabels(["Fecha", "Ventas", "Ganancia Total Barberos", "Ganancia Total Barbería"])
-        self.tabla_dias.horizontalHeader().setStretchLastSection(True)
+        header_totales = self.tabla_dias.horizontalHeader()
+        header_totales.setStretchLastSection(True)
+        header_totales.setSectionResizeMode(QHeaderView.Stretch)
         estilizar_tabla(self.tabla_dias)
         layout.addWidget(self.tabla_dias)
 

@@ -9,9 +9,9 @@ from .utils import to_iso
 def list_barbers(include_inactive: bool = True) -> List[dict]:
     cur = db.conn.cursor()
     if include_inactive:
-        cur.execute("SELECT * FROM barbers ORDER BY name;")
+        cur.execute("SELECT * FROM barbers ORDER BY id;")
     else:
-        cur.execute("SELECT * FROM barbers WHERE active=1 ORDER BY name;")
+        cur.execute("SELECT * FROM barbers WHERE active=1 ORDER BY id;")
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -117,6 +117,12 @@ def is_barber_off(barber_id: int, date_value: date) -> bool:
         (barber_id, date_value.isoformat()),
     )
     return cur.fetchone() is not None
+
+
+def remove_all_days_off() -> None:
+    cur = db.conn.cursor()
+    cur.execute("DELETE FROM barber_days_off;")
+    db.conn.commit()
 
 
 # CITAS

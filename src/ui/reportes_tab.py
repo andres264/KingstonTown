@@ -81,8 +81,8 @@ class ReportesTab(QWidget):
         layout.addWidget(self.tabla_dias)
 
         layout.addWidget(titulo_label("Cobros realizados"))
-        self.tabla_cobros = QTableWidget(0, 5)
-        self.tabla_cobros.setHorizontalHeaderLabels(["ID Cita", "Fecha", "Barbero", "Total", "Servicios"])
+        self.tabla_cobros = QTableWidget(0, 6)
+        self.tabla_cobros.setHorizontalHeaderLabels(["ID Cita", "Fecha", "Barbero", "Total", "Método de pago", "Servicios"])
         self.tabla_cobros.horizontalHeader().setStretchLastSection(True)
         estilizar_tabla(self.tabla_cobros)
         layout.addWidget(self.tabla_cobros)
@@ -136,7 +136,15 @@ class ReportesTab(QWidget):
             tabla.setItem(idx, 2, QTableWidgetItem(format_currency(valores["barbero"])))
             tabla.setItem(idx, 3, QTableWidgetItem(format_currency(valores["barberia"])))
             if incluir_servicios:
-                tabla.setItem(idx, 4, QTableWidgetItem(", ".join(valores.get("servicios", []))))
+                servicios_raw = valores.get("servicios", [])
+                if servicios_raw and isinstance(servicios_raw[0], tuple):
+                    agregados = {}
+                    for nombre, qty in servicios_raw:
+                        agregados[nombre] = agregados.get(nombre, 0) + qty
+                    servicios_txt = ", ".join([f"{n} x{q}" for n, q in agregados.items()])
+                else:
+                    servicios_txt = ", ".join(servicios_raw)
+                tabla.setItem(idx, 4, QTableWidgetItem(servicios_txt))
 
     def _exportar_pdf(self):
         if not hasattr(self, "_ultimo_resumen"):
@@ -155,7 +163,8 @@ class ReportesTab(QWidget):
             self.tabla_cobros.setItem(idx, 1, QTableWidgetItem(pago["fecha"]))
             self.tabla_cobros.setItem(idx, 2, QTableWidgetItem(pago["barber"]))
             self.tabla_cobros.setItem(idx, 3, QTableWidgetItem(format_currency(pago["total"])))
-            self.tabla_cobros.setItem(idx, 4, QTableWidgetItem(pago.get("servicios", "")))
+            self.tabla_cobros.setItem(idx, 4, QTableWidgetItem(pago.get("metodo_pago", "")))
+            self.tabla_cobros.setItem(idx, 5, QTableWidgetItem(pago.get("servicios", "")))
 
     def _borrar_cobro(self):
         if not self.tabla_cobros.rowCount():

@@ -61,13 +61,14 @@ class AgendaTab(QWidget):
         filtros.addStretch()
         layout.addLayout(filtros)
 
-        self.tabla = QTableWidget(0, 8)
+        self.tabla = QTableWidget(0, 9)
         self.tabla.setHorizontalHeaderLabels(
-            ["ID", "Inicio", "Fin", "Barbero", "Cliente", "Servicio", "Estado", "Notas"]
+            ["ID", "Inicio", "Fin", "Barbero", "Cliente", "Servicio", "Estado", "Teléfono", "Notas"]
         )
         header = self.tabla.horizontalHeader()
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self._estilizar_tabla(self.tabla)
         layout.addWidget(self.tabla)
 
@@ -118,7 +119,11 @@ class AgendaTab(QWidget):
             self._set_cell(self.tabla, row, 4, cliente_nombre, Qt.AlignCenter)
             self._set_cell(self.tabla, row, 5, servicios.get(cita.get("primary_service_id"), ""))
             self._set_cell(self.tabla, row, 6, cita["status"])
-            self._set_cell(self.tabla, row, 7, cita.get("notes") or "", Qt.AlignLeft | Qt.AlignVCenter)
+            telefono = ""
+            if cita.get("client_id") and cliente and cliente.get("phone"):
+                telefono = cliente["phone"]
+            self._set_cell(self.tabla, row, 7, telefono, Qt.AlignCenter)
+            self._set_cell(self.tabla, row, 8, cita.get("notes") or "", Qt.AlignLeft | Qt.AlignVCenter)
 
     def _selected_id(self) -> int:
         row = self.tabla.currentRow()

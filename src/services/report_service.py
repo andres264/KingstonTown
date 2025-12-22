@@ -48,7 +48,7 @@ class ReportService:
             por_dia[dia]["barbero"] += p["barber_total"]
             por_dia[dia]["barberia"] += p["shop_total"]
 
-        # Traer líneas de servicios por pago para agregar nombres y qty
+        # Traer líneas de servicios por pago para agregar nombres y qty y agrupar por barbero
         cur.execute(
             """
             SELECT p.appointment_id, a.barber_id, b.name as barber_name, l.qty, s.name as service_name
@@ -64,19 +64,26 @@ class ReportService:
         )
         for row in cur.fetchall():
             etiqueta = f"{row['service_name']} x{row['qty']}"
-            servicios_por_pago[row["appointment_id"]].append(etiqueta)
-            por_barbero[row["barber_name"]]["servicios"].append(etiqueta)
+            servicios_por_pago[row["appointment_id"]].append((row["service_name"], row["qty"]))
+            por_barbero[row["barber_name"]]["servicios"].append((row["service_name"], row["qty"]))
 
         citas_totales = self._contar_citas(inicio, fin, barber_id)
         pagos_detalle = []
         for p in pagos:
+            # agrupar servicios por pago
+            items = servicios_por_pago.get(p["appointment_id"], [])
+            agregados = defaultdict(int)
+            for nombre, qty in items:
+                agregados[nombre] += qty
+            servicios_txt = ", ".join([f"{n} x{q}" for n, q in agregados.items()])
             pagos_detalle.append(
                 {
                     "appointment_id": p["appointment_id"],
                     "barber": p["barber_name"],
                     "total": p["total_amount"],
-                    "servicios": ", ".join(servicios_por_pago.get(p["appointment_id"], [])),
+                    "servicios": servicios_txt,
                     "fecha": p["paid_at"][:10],
+                    "metodo_pago": p["payment_method"],
                 }
             )
         return {

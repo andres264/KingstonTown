@@ -103,6 +103,8 @@ class CobrosTab(QWidget):
             self.metodo_pago.addItem(m)
 
     def _cargar_pendientes(self):
+        # recargar catálogo de servicios por si se añadieron en Configuración
+        self._load_comboboxes()
         fecha = self.fecha.date().toPython()
         inicio = datetime.combine(fecha, time(0, 0))
         fin = datetime.combine(fecha, time(23, 59))

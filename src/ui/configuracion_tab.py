@@ -82,7 +82,7 @@ class ConfiguracionTab(QWidget):
         self.gan_barberia_spin.setMaximum(10_000_000)
         self.gan_barberia_spin.setSingleStep(1000)
         self.duracion_spin = QSpinBox()
-        self.duracion_spin.setMinimum(config.INTERVALO_MINUTOS)
+        self.duracion_spin.setMinimum(1)
         self.duracion_spin.setMaximum(240)
         btn_serv = QPushButton("Agregar servicio")
         btn_serv.clicked.connect(self._guardar_servicio)

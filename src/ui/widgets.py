@@ -14,3 +14,4 @@ def estilizar_tabla(tabla: QTableWidget) -> None:
         "QHeaderView::section {background-color:#e3f2fd; font-weight:bold;}"
     )
 
+

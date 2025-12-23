@@ -16,3 +16,5 @@ def estilizar_tabla(tabla: QTableWidget) -> None:
 
 
 
+
+

@@ -151,9 +151,14 @@ class ReportesTab(QWidget):
             QMessageBox.warning(self, "Sin datos", "Genere un reporte primero")
             return
         inicio, fin, data, _ = self._ultimo_resumen
-        path = config.BASE_DIR / "reporte.pdf"
-        report_service.exportar_pdf(path, data, "Reporte Barbería", (inicio, fin))
-        QMessageBox.information(self, "PDF generado", f"Archivo: {path}")
+        try:
+            config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+            nombre = f"reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            path = config.REPORTS_DIR / nombre
+            report_service.exportar_pdf(path, data, "Reporte Barbería", (inicio, fin))
+            QMessageBox.information(self, "PDF generado", f"Archivo: {path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Error al exportar PDF", str(exc))
 
     def _llenar_cobros(self, pagos_detalle):
         self.tabla_cobros.setRowCount(0)

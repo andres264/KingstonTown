@@ -12,6 +12,8 @@ from .ui.main_window import MainWindow
 def main():
     try:
         config.ensure_directories()
+        # Crear carpeta de reportes si no existe
+        config.REPORTS_DIR.mkdir(parents=True, exist_ok=True)
         db.init_db()
         if config.DB_PATH.exists():
             perform_backup()

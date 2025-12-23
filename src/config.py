@@ -11,6 +11,7 @@ else:
 DB_PATH = BASE_DIR / "barberia.db"
 BACKUP_DIR = BASE_DIR / "backups"
 LOGO_PATH = BASE_DIR / "logo_barberia.png"
+REPORTS_DIR = BASE_DIR / "REPORTES"
 
 # Horario de la barbería
 HORARIO_APERTURA = (9, 30)  # 09:30

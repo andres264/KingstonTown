@@ -129,17 +129,27 @@ class ReportService:
         )
         story.append(Spacer(1, 12))
 
-        # Tabla por barbero
+        # Tabla por barbero (agrupar servicios si vienen como tuplas)
         if data["por_barbero"]:
             tabla_data = [["Nombre Barbero", "Ventas", "Total Barbero", "Barbería", "Servicios"]]
             for barber, valores in data["por_barbero"].items():
+                servicios_raw = valores.get("servicios", [])
+                servicios_txt = ""
+                if servicios_raw:
+                    if isinstance(servicios_raw[0], tuple):
+                        agregados = {}
+                        for nombre, qty in servicios_raw:
+                            agregados[nombre] = agregados.get(nombre, 0) + qty
+                        servicios_txt = ", ".join([f"{n} x{q}" for n, q in agregados.items()])
+                    else:
+                        servicios_txt = ", ".join(servicios_raw)
                 tabla_data.append(
                     [
                         barber,
                         format_currency(valores["ventas"]),
                         format_currency(valores["barbero"]),
                         format_currency(valores["barberia"]),
-                        ", ".join(valores.get("servicios", [])),
+                        servicios_txt,
                     ]
                 )
             table = Table(tabla_data, hAlign="LEFT")
